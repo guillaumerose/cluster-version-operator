@@ -1,0 +1,6 @@
+kind: Test
+apiVersion: v1
+metadata:
+  name: file-30-yml
+  annotations:
+    include.release.openshift.io/edge: "true"

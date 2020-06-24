@@ -156,6 +156,8 @@ type Operator struct {
 	// exclude is an optional identifier used to exclude certain manifests
 	// via annotation
 	exclude string
+
+	clusterProfile string
 }
 
 // New returns a new cluster version operator.
@@ -173,6 +175,7 @@ func New(
 	client clientset.Interface,
 	kubeClient kubernetes.Interface,
 	exclude string,
+	clusterProfile string,
 ) *Operator {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
@@ -199,7 +202,8 @@ func New(
 		availableUpdatesQueue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "availableupdates"),
 		upgradeableQueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "upgradeable"),
 
-		exclude: exclude,
+		exclude:        exclude,
+		clusterProfile: clusterProfile,
 	}
 
 	cvInformer.Informer().AddEventHandler(optr.eventHandler())
@@ -223,7 +227,7 @@ func New(
 // controller that loads and applies content to the cluster. It returns an error if the payload appears to
 // be in error rather than continuing.
 func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestConfig *rest.Config) error {
-	update, err := payload.LoadUpdate(optr.defaultPayloadDir(), optr.releaseImage, optr.exclude)
+	update, err := payload.LoadUpdate(optr.defaultPayloadDir(), optr.releaseImage, optr.exclude, "")
 	if err != nil {
 		return fmt.Errorf("the local release contents are invalid - no current version can be determined from disk: %v", err)
 	}
@@ -269,6 +273,7 @@ func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestCo
 		},
 		optr.exclude,
 		optr.eventRecorder,
+		optr.clusterProfileRetriever,
 	)
 
 	return nil

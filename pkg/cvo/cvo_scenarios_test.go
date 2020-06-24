@@ -94,6 +94,9 @@ func setupCVOTest(payloadDir string) (*Operator, map[string]runtime.Object, *fak
 		},
 		"exclude-test",
 		record.NewFakeRecorder(100),
+		func() (string, error) {
+			return "", nil
+		},
 	)
 	o.configSync = worker
 

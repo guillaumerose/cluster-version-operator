@@ -66,6 +66,8 @@ type Options struct {
 	// exclude.release.openshift.io/<identifier>=true
 	Exclude string
 
+	ClusterProfile string
+
 	// for testing only
 	Name            string
 	Namespace       string
@@ -94,6 +96,7 @@ func NewOptions() *Options {
 		PayloadOverride: os.Getenv("PAYLOAD_OVERRIDE"),
 		ResyncInterval:  minResyncPeriod,
 		Exclude:         os.Getenv("EXCLUDE_MANIFESTS"),
+		ClusterProfile:  os.Getenv("CLUSTER_PROFILE"),
 	}
 }
 
@@ -414,6 +417,7 @@ func (o *Options) NewControllerContext(cb *ClientBuilder) *Context {
 			cb.ClientOrDie(o.Namespace),
 			cb.KubeClientOrDie(o.Namespace, useProtobuf),
 			o.Exclude,
+			o.ClusterProfile,
 		),
 	}
 	if o.EnableAutoUpdate {

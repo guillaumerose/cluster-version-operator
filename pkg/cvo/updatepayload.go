@@ -14,6 +14,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -24,6 +25,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-version-operator/lib/resourcebuilder"
+	"github.com/openshift/cluster-version-operator/pkg/internal"
 	"github.com/openshift/cluster-version-operator/pkg/payload"
 	"github.com/openshift/cluster-version-operator/pkg/verify"
 )
@@ -314,4 +316,19 @@ func findUpdateFromConfigVersion(config *configv1.ClusterVersion, version string
 		}
 	}
 	return configv1.Update{}, false
+}
+
+func (optr *Operator) clusterProfileRetriever() (string, error) {
+	if optr.clusterProfile != "" {
+		return optr.clusterProfile, nil
+	}
+	configMap, err := optr.cmConfigLister.Get(internal.ClusterProfileConfigMap)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.Infof("Cannot get ConfigMap %s/%s, excluding all profiles", internal.ConfigNamespace, internal.ClusterProfileConfigMap)
+			return "", nil
+		}
+		return "", err
+	}
+	return configMap.Data["profile"], nil
 }

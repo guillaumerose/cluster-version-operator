@@ -104,7 +104,7 @@ func Test_loadUpdatePayload(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := LoadUpdate(tt.args.dir, tt.args.releaseImage, "exclude-test")
+			got, err := LoadUpdate(tt.args.dir, tt.args.releaseImage, "exclude-test", "default")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("loadUpdatePayload() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -122,4 +122,58 @@ func mustRead(path string) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func TestExclude(t *testing.T) {
+	tests := []struct {
+		exclude     string
+		profile     string
+		annotations map[string]interface{}
+
+		isExcluded bool
+	}{
+		{
+			exclude:     "",
+			annotations: map[string]interface{}{"exclude.release.openshift.io/identifier": "true"},
+		},
+		{
+			exclude:     "identifier",
+			annotations: map[string]interface{}{"exclude.release.openshift.io/identifier": "true"},
+			isExcluded:  true,
+		},
+		{
+			profile:     "",
+			annotations: map[string]interface{}{"include.release.openshift.io/edge": "true"},
+			isExcluded:  true,
+		},
+		{
+			profile:     "crc",
+			annotations: map[string]interface{}{"include.release.openshift.io/edge": "true"},
+			isExcluded:  true,
+		},
+		{
+			profile:     "edge",
+			annotations: map[string]interface{}{"include.release.openshift.io/edge": "true"},
+		},
+		{
+			profile: "",
+		},
+		{
+			profile: "edge",
+		},
+	}
+	for _, tt := range tests {
+		ret := shouldExclude(tt.exclude, tt.profile, &lib.Manifest{
+			Obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": tt.annotations,
+					},
+				},
+			},
+		})
+		if ret != tt.isExcluded {
+			t.Errorf("(exclude: %v, profile: %v, annotations: %v) %v != %v", tt.exclude, tt.profile, tt.annotations, tt.isExcluded, ret)
+		}
+	}
 }

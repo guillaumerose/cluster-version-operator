@@ -155,11 +155,13 @@ type SyncWorker struct {
 	// manifests should be excluded based on an annotation
 	// of the form exclude.release.openshift.io/<identifier>=true
 	exclude string
+
+	clusterProfileRetriever func() (string, error)
 }
 
 // NewSyncWorker initializes a ConfigSyncWorker that will retrieve payloads to disk, apply them via builder
 // to a server, and obey limits about how often to reconcile or retry on errors.
-func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, eventRecorder record.EventRecorder) *SyncWorker {
+func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, eventRecorder record.EventRecorder, clusterProfileRetriever func() (string, error)) *SyncWorker {
 	return &SyncWorker{
 		retriever:     retriever,
 		builder:       builder,
@@ -175,14 +177,16 @@ func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, 
 		report: make(chan SyncWorkerStatus, 500),
 
 		exclude: exclude,
+
+		clusterProfileRetriever: clusterProfileRetriever,
 	}
 }
 
 // NewSyncWorkerWithPreconditions initializes a ConfigSyncWorker that will retrieve payloads to disk, apply them via builder
 // to a server, and obey limits about how often to reconcile or retry on errors.
 // It allows providing preconditions for loading payload.
-func NewSyncWorkerWithPreconditions(retriever PayloadRetriever, builder payload.ResourceBuilder, preconditions precondition.List, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, eventRecorder record.EventRecorder) *SyncWorker {
-	worker := NewSyncWorker(retriever, builder, reconcileInterval, backoff, exclude, eventRecorder)
+func NewSyncWorkerWithPreconditions(retriever PayloadRetriever, builder payload.ResourceBuilder, preconditions precondition.List, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, eventRecorder record.EventRecorder, clusterProfileRetriever func() (string, error)) *SyncWorker {
+	worker := NewSyncWorker(retriever, builder, reconcileInterval, backoff, exclude, eventRecorder, clusterProfileRetriever)
 	worker.preconditions = preconditions
 	return worker
 }
@@ -505,8 +509,13 @@ func (w *SyncWorker) syncOnce(ctx context.Context, work *SyncWork, maxWorkers in
 			return err
 		}
 
+		profile, err := w.clusterProfileRetriever()
+		if err != nil {
+			return err
+		}
+
 		w.eventRecorder.Eventf(cvoObjectRef, corev1.EventTypeNormal, "VerifyPayload", "verifying payload version=%q image=%q", update.Version, update.Image)
-		payloadUpdate, err := payload.LoadUpdate(info.Directory, update.Image, w.exclude)
+		payloadUpdate, err := payload.LoadUpdate(info.Directory, update.Image, w.exclude, profile)
 		if err != nil {
 			w.eventRecorder.Eventf(cvoObjectRef, corev1.EventTypeWarning, "VerifyPayloadFailed", "verifying payload failed version=%q image=%q failure=%v", update.Version, update.Image, err)
 			reporter.Report(SyncWorkerStatus{
