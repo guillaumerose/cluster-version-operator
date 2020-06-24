@@ -232,7 +232,7 @@ func (vcb *verifyClientBuilder) HTTPClient() (*http.Client, error) {
 // controller that loads and applies content to the cluster. It returns an error if the payload appears to
 // be in error rather than continuing.
 func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestConfig *rest.Config) error {
-	update, err := payload.LoadUpdate(optr.defaultPayloadDir(), optr.releaseImage, optr.exclude)
+	update, err := payload.LoadUpdate(optr.defaultPayloadDir(), optr.releaseImage, optr.exclude, "")
 	if err != nil {
 		return fmt.Errorf("the local release contents are invalid - no current version can be determined from disk: %v", err)
 	}
@@ -278,6 +278,7 @@ func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestCo
 			Steps:    3,
 		},
 		optr.exclude,
+		optr.defaultClusterProfileRetriever(),
 	)
 
 	return nil

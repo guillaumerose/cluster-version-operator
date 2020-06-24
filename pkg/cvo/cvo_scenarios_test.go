@@ -92,6 +92,7 @@ func setupCVOTest(payloadDir string) (*Operator, map[string]runtime.Object, *fak
 			Steps: 1,
 		},
 		"exclude-test",
+		&fakeClusterProfileRetriever{},
 	)
 	o.configSync = worker
 

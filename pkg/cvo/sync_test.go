@@ -424,6 +424,12 @@ func (r *fakeDirectoryRetriever) RetrievePayload(ctx context.Context, update con
 	return r.Info, r.Err
 }
 
+type fakeClusterProfileRetriever struct{}
+
+func (fakeClusterProfileRetriever) RetrieveClusterProfile(ctx context.Context) (string, error) {
+	return "default", nil
+}
+
 // testResourceBuilder uses a fake dynamic client to exercise the generic builder in tests.
 type testResourceBuilder struct {
 	client    *dynamicfake.FakeDynamicClient

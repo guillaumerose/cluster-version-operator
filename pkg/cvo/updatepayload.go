@@ -5,6 +5,8 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
+	"github.com/openshift/cluster-version-operator/pkg/internal"
+	listerscorev1 "k8s.io/client-go/listers/core/v1"
 	"os"
 	"path/filepath"
 	"sort"
@@ -314,4 +316,22 @@ func findUpdateFromConfigVersion(config *configv1.ClusterVersion, version string
 		}
 	}
 	return configv1.Update{}, false
+}
+
+func (optr *Operator) defaultClusterProfileRetriever() ClusterProfileRetriever {
+	return &clusterProfileRetriever{
+		cmConfigLister: optr.cmConfigLister,
+	}
+}
+
+type clusterProfileRetriever struct {
+	cmConfigLister listerscorev1.ConfigMapNamespaceLister
+}
+
+func (r *clusterProfileRetriever) RetrieveClusterProfile(_ context.Context) (string, error) {
+	configMap, err := r.cmConfigLister.Get(internal.ClusterProfileConfigMap)
+	if err != nil {
+		return "", err
+	}
+	return configMap.Data["profile"], nil
 }

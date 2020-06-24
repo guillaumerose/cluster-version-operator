@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -107,7 +108,7 @@ type Update struct {
 	Manifests    []lib.Manifest
 }
 
-func LoadUpdate(dir, releaseImage, excludeIdentifier string) (*Update, error) {
+func LoadUpdate(dir, releaseImage, excludeIdentifier, profile string) (*Update, error) {
 	payload, tasks, err := loadUpdatePayloadMetadata(dir, releaseImage)
 	if err != nil {
 		return nil, err
@@ -157,7 +158,7 @@ func LoadUpdate(dir, releaseImage, excludeIdentifier string) (*Update, error) {
 			// Filter out manifests that should be excluded based on annotation
 			filteredMs := []lib.Manifest{}
 			for _, manifest := range ms {
-				if shouldExclude(excludeIdentifier, &manifest) {
+				if shouldExclude(excludeIdentifier, profile, &manifest) {
 					continue
 				}
 				filteredMs = append(filteredMs, manifest)
@@ -188,10 +189,38 @@ func LoadUpdate(dir, releaseImage, excludeIdentifier string) (*Update, error) {
 	return payload, nil
 }
 
-func shouldExclude(excludeIdentifier string, manifest *lib.Manifest) bool {
-	excludeAnnotation := fmt.Sprintf("exclude.release.openshift.io/%s", excludeIdentifier)
+func shouldExclude(excludeIdentifier, profile string, manifest *lib.Manifest) bool {
 	annotations := manifest.Object().GetAnnotations()
-	return annotations != nil && annotations[excludeAnnotation] == "true"
+	if annotations == nil {
+		return false
+	}
+
+	excludeAnnotation := fmt.Sprintf("exclude.release.openshift.io/%s", excludeIdentifier)
+	if annotations[excludeAnnotation] == "true" {
+		return true
+	}
+
+	if profile == "" {
+		return false
+	}
+
+	shouldCheckProfile := false
+	for k := range annotations {
+		if strings.HasPrefix(k, "include.release.openshift.io/") {
+			shouldCheckProfile = true
+			break
+		}
+	}
+
+	if shouldCheckProfile {
+		profileAnnotation := fmt.Sprintf("include.release.openshift.io/%s", profile)
+		if val, ok := annotations[profileAnnotation]; ok && val == "true" {
+			return false
+		}
+		return true
+	}
+
+	return false
 }
 
 // ValidateDirectory checks if a directory can be a candidate update by

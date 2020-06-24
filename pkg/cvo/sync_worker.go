@@ -56,6 +56,10 @@ type PayloadRetriever interface {
 	RetrievePayload(ctx context.Context, desired configv1.Update) (PayloadInfo, error)
 }
 
+type ClusterProfileRetriever interface {
+	RetrieveClusterProfile(ctx context.Context) (string, error)
+}
+
 // StatusReporter abstracts how status is reported by the worker run method. Introduced for testing.
 type StatusReporter interface {
 	Report(status SyncWorkerStatus)
@@ -152,11 +156,13 @@ type SyncWorker struct {
 	// manifests should be excluded based on an annotation
 	// of the form exclude.release.openshift.io/<identifier>=true
 	exclude string
+
+	clusterProfileRetriever ClusterProfileRetriever
 }
 
 // NewSyncWorker initializes a ConfigSyncWorker that will retrieve payloads to disk, apply them via builder
 // to a server, and obey limits about how often to reconcile or retry on errors.
-func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, reconcileInterval time.Duration, backoff wait.Backoff, exclude string) *SyncWorker {
+func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, clusterProfileRetriever ClusterProfileRetriever) *SyncWorker {
 	return &SyncWorker{
 		retriever: retriever,
 		builder:   builder,
@@ -171,14 +177,16 @@ func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, 
 		report: make(chan SyncWorkerStatus, 500),
 
 		exclude: exclude,
+
+		clusterProfileRetriever: clusterProfileRetriever,
 	}
 }
 
 // NewSyncWorkerWithPreconditions initializes a ConfigSyncWorker that will retrieve payloads to disk, apply them via builder
 // to a server, and obey limits about how often to reconcile or retry on errors.
 // It allows providing preconditions for loading payload.
-func NewSyncWorkerWithPreconditions(retriever PayloadRetriever, builder payload.ResourceBuilder, preconditions precondition.List, reconcileInterval time.Duration, backoff wait.Backoff, exclude string) *SyncWorker {
-	worker := NewSyncWorker(retriever, builder, reconcileInterval, backoff, exclude)
+func NewSyncWorkerWithPreconditions(retriever PayloadRetriever, builder payload.ResourceBuilder, preconditions precondition.List, reconcileInterval time.Duration, backoff wait.Backoff, exclude string, clusterProfileRetriever ClusterProfileRetriever) *SyncWorker {
+	worker := NewSyncWorker(retriever, builder, reconcileInterval, backoff, exclude, clusterProfileRetriever)
 	worker.preconditions = preconditions
 	return worker
 }
@@ -494,7 +502,12 @@ func (w *SyncWorker) syncOnce(ctx context.Context, work *SyncWork, maxWorkers in
 			return err
 		}
 
-		payloadUpdate, err := payload.LoadUpdate(info.Directory, update.Image, w.exclude)
+		profile, err := w.clusterProfileRetriever.RetrieveClusterProfile(ctx)
+		if err != nil {
+			return err
+		}
+
+		payloadUpdate, err := payload.LoadUpdate(info.Directory, update.Image, w.exclude, profile)
 		if err != nil {
 			reporter.Report(SyncWorkerStatus{
 				Generation:  work.Generation,
