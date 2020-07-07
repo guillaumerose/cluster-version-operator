@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-operator
+  namespace: openshift-ingress-operator
+  annotations:
+    config.openshift.io/inject-proxy: ingress-operator
+    include.release.openshift.io/crc: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: ingress-operator
+  template:
+    metadata:
+      labels:
+        name: ingress-operator
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        node-role.kubernetes.io/master: ""
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 120
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 120
+      serviceAccountName: ingress-operator
+      priorityClassName: system-cluster-critical
+      containers:
+        - name: ingress-operator
+          terminationMessagePolicy: FallbackToLogsOnError
+          imagePullPolicy: IfNotPresent
+          image: quay.io/gurose/cluster-ingress-operator:e521e4ce
+          command:
+            - ingress-operator
+            - start
+            - --namespace
+            - "$(WATCH_NAMESPACE)"
+            - --image
+            - "$(IMAGE)"
+            - --release-version
+            - "$(RELEASE_VERSION)"
+          env:
+            - name: RELEASE_VERSION
+              value: "4.5.0-rc.6"
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: IMAGE
+              value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c54a192b3c745fd42ec9a27ddf87c7ec4d4fbb10e9d66c911a77222e51269a3f
+          resources:
+            requests:
+              cpu: 10m
+          volumeMounts:
+            - name: trusted-ca
+              mountPath: /etc/pki/ca-trust/extracted/pem
+              readOnly: true
+        - name: kube-rbac-proxy
+          image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:0b9be905dc8404760427a4bfbb9274545b2fb03774d85cd8ee5d93f847c69293
+          args:
+            - --logtostderr
+            - --secure-listen-address=:9393
+            - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+            - --upstream=http://127.0.0.1:60000/
+            - --tls-cert-file=/etc/tls/private/tls.crt
+            - --tls-private-key-file=/etc/tls/private/tls.key
+          ports:
+            - containerPort: 9393
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 40Mi
+          volumeMounts:
+            - mountPath: /etc/tls/private
+              name: metrics-tls
+              readOnly: true
+      volumes:
+        - name: metrics-tls
+          secret:
+            secretName: metrics-tls
+        - name: trusted-ca
+          configMap:
+            name: trusted-ca
+            items:
+              - key: ca-bundle.crt
+                path: tls-ca-bundle.pem

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-profile
+  namespace: openshift-config
+data:
+  profile: crc
